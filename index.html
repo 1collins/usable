@@ -221,4 +221,319 @@ const recipes = [
 const shopItems = [
   { id:'rice1',      name:'Basmati Rice 2kg',       price:200, image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0001.jpg' },
   { id:'pilau-spice',name:'Pilau Masala 100g',     price:60,  image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0002.jpg' },
-  { id:'onion1',
+  { id:'onion1',     name:'Onions 1kg',            price:60,  image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0003.jpg' },
+  { id:'salt1',      name:'Salt 1kg',              price:30,  image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0005.jpg' },
+  { id:'garlic1',    name:'Garlic paste 200g',     price:80,  image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0007.jpg' },
+  { id:'chicken1',   name:'Chicken 1kg',           price:450, image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0008.jpg' },
+  { id:'maize1',     name:'Maize meal 2kg',        price:150, image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0009.jpg' },
+  { id:'flour1',     name:'All-purpose flour 2kg', price:220, image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0010.jpg' },
+  { id:'oil1',       name:'Cooking oil 1L',        price:350, image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0014.jpg' },
+  { id:'noodles1',   name:'Instant noodles (1pc)', price:70,  image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0015.jpg' },
+  { id:'veg1',       name:'Mixed veg 500g',        price:120, image:'https://raw.githubusercontent.com/1collins/image/e88660bef9ec7d9770d55454ac4a1157a51ecca2/collins%20var/IMG-20251020-WA0016.jpg' }
+];
+
+/* ============================
+   STATE (localStorage)
+   ============================ */
+const state = {
+  cart: JSON.parse(localStorage.getItem('uk_cart') || '[]'),
+  fridge: JSON.parse(localStorage.getItem('uk_fridge') || '[]'),
+  planned: JSON.parse(localStorage.getItem('uk_planned') || '[]'),
+  tokenPrice: Number(localStorage.getItem('uk_tokenPrice') || CONFIG.TOKEN_PRICE)
+};
+
+/* ============================
+   Helpers & UI functions
+   ============================ */
+function saveState(){
+  localStorage.setItem('uk_cart', JSON.stringify(state.cart));
+  localStorage.setItem('uk_fridge', JSON.stringify(state.fridge));
+  localStorage.setItem('uk_planned', JSON.stringify(state.planned));
+  localStorage.setItem('uk_tokenPrice', String(state.tokenPrice));
+  renderCart(); renderFridge(); renderCartCount();
+}
+function findShopById(id){ return shopItems.find(s => s.id === id) }
+function blink(el){ if(!el) return; el.classList.add('blink'); setTimeout(()=>el.classList.remove('blink'),900); }
+function escapeHtml(text){ return String(text||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* Toast (non-blocking) */
+function showToast(text){
+  const t = document.getElementById('toast');
+  t.textContent = text;
+  t.classList.add('show');
+  setTimeout(()=> t.classList.remove('show'), 1400);
+}
+
+/* ============================
+   Render functions
+   ============================ */
+function renderQuickBar(){
+  const quick = document.getElementById('quickItems');
+  quick.innerHTML = '';
+  const featured = CONFIG.featuredShopIds;
+  featured.forEach(id=>{
+    const s = findShopById(id);
+    if(!s) return;
+    const div = document.createElement('div'); div.className='quick-item';
+    div.innerHTML = `<div style="font-size:13px">${escapeHtml(s.name)}</div><div style="font-weight:700">KES ${s.price}</div><div><button onclick="quickAddShop('${s.id}', this)" class="ghost">Add</button></div>`;
+    quick.appendChild(div);
+  });
+}
+
+function renderRecipes(){
+  const el = document.getElementById('recipesGrid'); el.innerHTML = '';
+  recipes.forEach(r=>{
+    const card = document.createElement('div'); card.className='card';
+    const ingHtml = r.ingredients.map(i=>`<div class="ingredient-row"><div>${escapeHtml(i.name)}</div><div>${i.shopId ? `<button class="ghost" onclick="addToFridge('${escapeHtml(i.name)}','${i.shopId}')">Add to Fridge</button>` : ''}</div></div>`).join('');
+    card.innerHTML = `
+      <img src="${r.image}" alt="${escapeHtml(r.title)}" onerror="this.src='https://via.placeholder.com/400x300?text=No+Image'">
+      <h3>${escapeHtml(r.title)}</h3>
+      <div class="buttons">
+        <button class="ghost" onclick="toggleDetails('${r.id}')">View ingredients & steps</button>
+        <button class="ghost" onclick="planRecipe('${r.id}', this)">Plan</button>
+        <button onclick="sendRecipeWhatsApp('${r.id}', this)">Cook (WhatsApp)</button>
+        <button class="ghost" onclick="addRecipeIngredientsToCart('${r.id}')">Add ingredients → Shop</button>
+      </div>
+      <div id="details-${r.id}" class="hidden" style="margin-top:10px">
+        <strong>Ingredients</strong>
+        ${ingHtml}
+        <strong style="display:block;margin-top:8px">Steps</strong>
+        <ol style="margin:6px 0 0 18px">${r.steps.map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ol>
+      </div>
+    `;
+    el.appendChild(card);
+  });
+}
+
+function renderShop(){
+  const el = document.getElementById('shopGrid'); el.innerHTML = '';
+  shopItems.forEach(s=>{
+    const card = document.createElement('div'); card.className='card shop-item'; card.id = 'shop-' + s.id;
+    card.innerHTML = `
+      <img src="${s.image}" alt="${escapeHtml(s.name)}" onerror="this.src='https://via.placeholder.com/400x300?text=No+Image'">
+      <h4>${escapeHtml(s.name)}</h4>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+        <div style="font-weight:700">KES ${s.price}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="ghost" onclick="addToFridge('${escapeHtml(s.name)}','${s.id}')">Save</button>
+          <button onclick="addShopToCart('${s.id}', this)">Add to cart</button>
+        </div>
+      </div>
+    `;
+    el.appendChild(card);
+  });
+}
+
+function renderFridge(){
+  const el = document.getElementById('fridgeList'); el.innerHTML = '';
+  if(state.fridge.length === 0){ el.innerHTML = '<div class="card">Your fridge is empty.</div>'; return; }
+  state.fridge.forEach(f=>{
+    const c = document.createElement('div'); c.className='card';
+    c.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${escapeHtml(f.name)}</strong></div><div><button class="ghost" onclick="goToShop('${f.shopId}')">View in shop</button></div></div>`;
+    el.appendChild(c);
+  });
+}
+
+function renderCart(){
+  const el = document.getElementById('cartItems'); el.innerHTML = '';
+  if(state.cart.length === 0){ el.innerHTML = '<div class="card">Cart is empty</div>'; document.getElementById('cartTotal').innerText = 0; return; }
+  let total = 0;
+  state.cart.forEach((c, idx)=>{
+    const row = document.createElement('div'); row.className='card'; row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.marginBottom='6px';
+    row.innerHTML = `<div>${escapeHtml(c.name)} x ${c.qty}</div><div>${c.price * c.qty} KES <button class="ghost" onclick="removeCartItem(${idx})">Remove</button></div>`;
+    el.appendChild(row);
+    total += c.price * c.qty;
+  });
+  document.getElementById('cartTotal').innerText = total;
+}
+
+function renderCartCount(){
+  const cnt = state.cart.reduce((s,i)=>s+i.qty,0);
+  document.getElementById('cartCount').innerText = cnt;
+}
+
+/* ============================
+   Actions
+   ============================ */
+function toggleDetails(id){
+  const el = document.getElementById('details-' + id);
+  if(!el) return;
+  el.classList.toggle('hidden');
+}
+
+function planRecipe(id, btn){
+  if(!state.planned.includes(id)) state.planned.push(id);
+  saveState();
+  blink(btn);
+  showToast('Recipe added to plan');
+}
+
+function sendRecipeWhatsApp(id, btn){
+  const r = recipes.find(x=>x.id===id); if(!r) return;
+  const lines = [];
+  lines.push(`👋 Hello! I'd like to cook *${r.title}* today.`);
+  lines.push('');
+  lines.push('Ingredients:');
+  r.ingredients.forEach(i => lines.push(`- ${i.name}`));
+  lines.push('');
+  lines.push('Steps (short):');
+  r.steps.slice(0,6).forEach((s,i)=> lines.push(`${i+1}. ${s}`));
+  blink(btn);
+  showToast('Opening WhatsApp…');
+  window.open(`https://wa.me/${CONFIG.PHONE}?text=${encodeURIComponent(lines.join('\n'))}`, '_blank');
+}
+
+function addRecipeIngredientsToCart(id){
+  const r = recipes.find(x=>x.id===id); if(!r) return;
+  r.ingredients.forEach(i=>{
+    if(i.shopId){
+      const s = findShopById(i.shopId);
+      if(s){
+        const existing = state.cart.find(c => c.id === s.id);
+        if(existing) existing.qty++;
+        else state.cart.push({ id: s.id, name: s.name, price: s.price, qty: 1 });
+      }
+    }
+  });
+  saveState();
+  renderCart();
+  showToast('Ingredients added to cart');
+}
+
+function addToFridge(name, shopId){
+  if(!state.fridge.find(f=>f.name===name && f.shopId===shopId)) state.fridge.push({ name, shopId });
+  saveState();
+  switchTab('shop');
+  setTimeout(()=> {
+    const el = document.getElementById('shop-' + shopId);
+    if(el){
+      el.style.boxShadow = '0 8px 30px rgba(255,107,53,.18)';
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(()=> el.style.boxShadow='', 900);
+    }
+  }, 300);
+  showToast('Saved to fridge — opening shop');
+}
+
+function addShopToCart(shopId, btn){
+  const s = findShopById(shopId); if(!s) return;
+  const existing = state.cart.find(c => c.id === s.id);
+  if(existing) existing.qty++;
+  else state.cart.push({ id: s.id, name: s.name, price: s.price, qty: 1 });
+  saveState();
+  blink(btn);
+  showToast('Added to cart');
+}
+
+function removeCartItem(index){ state.cart.splice(index,1); saveState(); renderCart(); }
+
+document.getElementById('clearCart')?.addEventListener('click', ()=>{
+  if(!confirm('Clear cart?')) return;
+  state.cart = []; saveState(); renderCart();
+});
+
+/* Quick bar actions */
+function renderQuickActions(){
+  renderQuickBar();
+  document.getElementById('quickAddGas').addEventListener('click', quickAddGas);
+}
+function quickAddShop(shopId, btn){ addShopToCart(shopId, btn); blink(btn); }
+function quickAddGas(){ quickAddGasAction(); blink(document.getElementById('quickAddGas')); showToast('Gas added to cart'); }
+function quickAddGasAction(){
+  const qty = Number(document.getElementById('quickGasQty').value) || 1;
+  const id = 'gas-token';
+  const existing = state.cart.find(c => c.id === id);
+  if(existing) existing.qty += qty;
+  else state.cart.push({ id, name: `Gas tokens x${qty}`, price: state.tokenPrice, qty });
+  saveState();
+}
+
+/* Gas tab */
+const gasQtyEl = document.getElementById('gasQty');
+const gasTotalEl = document.getElementById('gasTotal');
+document.getElementById('tokenPrice').innerText = state.tokenPrice;
+function updateGasTotal(){ gasTotalEl.innerText = (Number(gasQtyEl.value) || 1) * state.tokenPrice; }
+gasQtyEl.addEventListener('input', updateGasTotal);
+document.getElementById('addGas').addEventListener('click', ()=>{
+  const qty = Number(gasQtyEl.value) || 1;
+  const id = 'gas-token';
+  const existing = state.cart.find(c => c.id === id);
+  if(existing) existing.qty += qty;
+  else state.cart.push({ id, name: `Gas tokens x${qty}`, price: state.tokenPrice, qty });
+  saveState(); renderCart();
+  showToast('Gas added to cart');
+});
+
+/* WhatsApp builders */
+function buildCartMessage(){
+  const lines = ['🛒 Unico Kitchen Order:'];
+  if(state.cart.length === 0) lines.push('(Cart is empty)');
+  state.cart.forEach(c => lines.push(`- ${c.name} x ${c.qty} = ${c.price * c.qty} KES`));
+  const total = state.cart.reduce((s,i)=>s + i.price * i.qty, 0);
+  lines.push(`Total: ${total} KES`);
+  if(state.fridge.length > 0){
+    lines.push('');
+    lines.push('Saved fridge items:');
+    state.fridge.forEach(f => lines.push(`- ${f.name}`));
+  }
+  return lines.join('\n');
+}
+
+function sendCartToWhatsApp(btn){
+  blink(btn);
+  const msg = buildCartMessage();
+  showToast('Opening WhatsApp…');
+  window.open(`https://wa.me/${CONFIG.PHONE}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+document.getElementById('sendCart')?.addEventListener('click', function(){ sendCartToWhatsApp(this); });
+document.getElementById('sendOrderHeader').addEventListener('click', function(){ sendCartToWhatsApp(this); });
+
+function buildPlanMessage(){
+  if(state.planned.length === 0) return 'Hello! I have no planned recipes yet.';
+  const lines = ['Hello! I plan to cook:'];
+  state.planned.forEach(id => {
+    const r = recipes.find(rr => rr.id === id);
+    if(r) lines.push(`- ${r.title}`);
+  });
+  return lines.join('\n');
+}
+document.getElementById('sendPlanHeader').addEventListener('click', function(){ blink(this); showToast('Opening WhatsApp…'); window.open(`https://wa.me/${CONFIG.PHONE}?text=${encodeURIComponent(buildPlanMessage())}`, '_blank'); });
+
+/* Nav & utilities */
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('hidden', p.id !== name));
+  if(name === 'shop') renderShop();
+  if(name === 'recipes') renderRecipes();
+  if(name === 'fridge') renderFridge();
+  if(name === 'gas') updateGasTotal();
+}
+document.getElementById('navTabs').addEventListener('click', (e)=>{ if(e.target.dataset.tab) switchTab(e.target.dataset.tab); });
+
+document.getElementById('openCartBtn').addEventListener('click', ()=>{
+  const panel = document.getElementById('cartPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  renderCart();
+});
+
+function goToShop(shopId){
+  switchTab('shop');
+  setTimeout(()=>{ const el = document.getElementById('shop-' + shopId); if(el){ el.style.boxShadow='0 8px 30px rgba(255,107,53,.18)'; el.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>el.style.boxShadow='',900);} },200);
+}
+
+/* Init */
+(function init(){
+  state.tokenPrice = CONFIG.TOKEN_PRICE;
+  document.getElementById('tokenPrice').innerText = state.tokenPrice;
+  document.getElementById('gasTotal').innerText = state.tokenPrice * (Number(document.getElementById('gasQty').value) || 1);
+
+  renderQuickActions();
+  renderRecipes();
+  renderShop();
+  renderFridge();
+  renderCart();
+  renderCartCount();
+})();
+</script>
+</body>
+</html>
